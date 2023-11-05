@@ -1,12 +1,18 @@
 import AWS from 'aws-sdk';
+import csv from 'csv-parser';
 import 'dotenv/config';
 import type { PageServerLoad } from './$types';
+import type { Recipe } from '../lib/types';
 
-export const load = (() => {
+export const load = (async () => {
 	const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 	const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 	const AWS_REGION = process.env.AWS_REGION;
 	const AWS_BUCKET = process.env.AWS_BUCKET;
+
+	if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION || !AWS_BUCKET) {
+		throw new Error('Missing AWS env variables');
+	}
 
 	AWS.config.update({
 		accessKeyId: AWS_ACCESS_KEY_ID,
@@ -16,42 +22,29 @@ export const load = (() => {
 
 	const s3 = new AWS.S3();
 
-	const params = {
-		Bucket: AWS_BUCKET,
-		Key: 'index.csv',
-	};
+	const recipes: Recipe[] = [];
 
-	// const rows = [];
+	await new Promise<void>((resolve, reject) => {
+		s3.getObject({ Bucket: AWS_BUCKET, Key: 'index.csv' })
+			.createReadStream()
+			.pipe(csv())
+			.on('data', (row) => {
+				recipes.push(row); // Store each row of the CSV file
+			})
+			.on('end', () => {
+				console.log('Recipes index file finished reading');
+				resolve();
 
-	const recipeLeft = 'aaaaaa';
-	const recipeRight = 'bbb';
-
-	// S3 getObject() to get left recipe
-	// s3.getObject(params)
-	// 	.createReadStream()
-	// 	.pipe(csv())
-	// 	.on('end', () => {
-	// 		console.log('CSV file reading finished');
-
-	// 		// const randomRow = rows[Math.floor(Math.random() * rows.length)];
-	// 		// console.log('Random Row:', randomRow);
-	// 	});
-
-	// S3 getObject() to get right recipe
-	// s3.getObject(params)
-	// 	.createReadStream()
-	// 	.pipe(csv())
-	// 	.on('end', () => {
-	// 		console.log('CSV file reading finished');
-
-	// 		// const randomRow = rows[Math.floor(Math.random() * rows.length)];
-	// 		// console.log('Random Row:', randomRow);
-	// 	});
-
-	const recipeCombined = 'kjasjdfbahd';
-	// AWS Lambda call combine code
+				// const randomRow = rows[Math.floor(Math.random() * rows.length)];
+				// console.log('Random Row:', randomRow);
+			})
+			.on('error', (err) => {
+				console.error(err);
+				reject(err);
+			});
+	});
 
 	return {
-		recipes: [recipeLeft, recipeRight],
+		recipes: recipes,
 	};
 }) satisfies PageServerLoad;
